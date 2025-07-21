@@ -6,6 +6,9 @@
        width="100%" 
        height="340px" />
 </p>
+<p align="center">
+  <em>Photo by <a href="https://images.unsplash.com/photo-1568018508399-e53bc8babdde?q=80&w=1174&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D">Baiq Daling</a> on Unsplash</em>
+</p>
 
 
 Solutions for this challenge are written in **MySQL**.
