@@ -27,7 +27,7 @@ The SQL dialect used will also be indicated inside each solution folder.
 ## Visuals
 
 Each challenge folder includes an image for visual appeal.  
-> 📷 All images are sourced from [Unsplash](https://unsplash.com/). Full credit goes to the original photographers.
+> 📷 All images are sourced from [Unsplash](https://unsplash.com/) and [Pexels](https://www.pexels.com/). Full credit goes to the original photographers.
 
 ---
 
