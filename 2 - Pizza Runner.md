@@ -1,7 +1,7 @@
 <h1 align="center">Case Study #2 – Pizza Runner</h1>
 
 <p align="center">
-  <img src="https://images.pexels.com/photos/4393430/pexels-photo-4393430.jpeg" 
+  <img src="[https://images.pexels.com/photos/4393430/pexels-photo-4393430.jpeg](https://images.unsplash.com/photo-1624900183034-338974e68033?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D)" 
        alt="Pizza Runner" 
        width="100%" 
        height="340px" />
