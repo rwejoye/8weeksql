@@ -4,7 +4,7 @@
   <img src="https://images.pexels.com/photos/1566837/pexels-photo-1566837.jpeg" 
        alt="Pizza Runner" 
        width="100%" 
-       height="340px" />
+       height="390px" />
 </p>
 
 
