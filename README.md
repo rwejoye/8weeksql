@@ -1,5 +1,8 @@
 # 8 Week SQL Challenge – My Solutions
 
+> 🛠️ **Work in Progress:** Final write-ups and polish coming soon.  
+> 📅 **Last updated:** July 21, 2025
+
 Welcome to my personal repository for the [8 Week SQL Challenge](https://8weeksqlchallenge.com/). This repo contains my attempt at solving the SQL case studies designed by Danny Ma and contributors of the original challenge.
 
 > ⚠️ Disclaimer: All credits for the case studies and datasets go to [8weeksqlchallenge.com](https://8weeksqlchallenge.com/). This repository only contains my personal solutions, which may contain errors or non-optimal approaches.
@@ -60,6 +63,7 @@ All case studies and datasets are created by:
 
 Images are from:  
 📷 [Unsplash](https://unsplash.com/)
+📷 [Pexels](https://www.pexels.com/)
 
 All errors in this repository are my own.
 
