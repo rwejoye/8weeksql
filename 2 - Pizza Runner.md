@@ -12,7 +12,7 @@
 
 Solutions for this challenge are written in *PostGreSQL*.
 
-## PIZZA METRICS
+## A. PIZZA METRICS
 
 ### 1. How many pizzas were ordered?
 ```sql
