@@ -170,3 +170,149 @@ FROM first_cte
 GROUP BY day_of_week, weekday_num
 ORDER BY weekday_num;
 ```
+
+## B. RUNNER AND CUSTOMER EXPERIENCE
+
+### 1. How many runners signed up for each 1 week period? (i.e. week starts 2021-01-01)
+```sql
+/*
+	To handle this, we take the difference of the registration date of each runner,
+	and the base date (i.e. 2021-01-01). This difference divided by 7 and floored + 1,
+	will give the week number of registration, which we can then group the runners by.
+*/
+
+WITH first_cte AS (
+SELECT runner_id,
+	registration_date - CAST('2021-01-01' AS DATE) AS days_diff
+FROM runners),
+second_cte AS (
+SELECT *, FLOOR(days_diff/7) + 1 AS week_no
+FROM first_cte)
+SELECT week_no, 
+	count(week_no) AS no_runners
+FROM second_cte
+GROUP BY week_no
+ORDER BY week_no;
+```
+
+### 2. What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
+```sql
+/*
+	Let arrival time = pickup_time - order_time.
+	We then take the average of this time for each runner.
+*/
+
+WITH first_cte AS (
+SELECT r.runner_id, 
+	r.pickup_time::timestamp - c.order_time::timestamp AS arrival_time
+FROM runner_orders r
+JOIN customer_orders c
+ON r.order_id = c.order_id
+WHERE pickup_time <> 'null'
+)
+SELECT runner_id, AVG(arrival_time) AS avg_arrival_time
+FROM first_cte
+GROUP BY runner_id
+ORDER BY runner_id;
+```
+
+### 3. Is there any relationship between the number of pizzas and how long the order takes to prepare?
+```sql
+/*
+	We combine the runner_orders table and customer_orders table, and take the diff
+	between the pickup and order time. (assuming prep_time = pickup_time - order_time)
+	From the results shown in the query, there is indeed a relationship between
+	the no_of_pizzas ordered and the time it takes to prepare.
+*/
+
+WITH first_cte AS (
+SELECT order_id, COUNT(order_id) AS no_of_pizzas, order_time
+FROM customer_orders
+GROUP BY order_id, order_time
+ORDER BY order_id ASC
+)
+SELECT f.no_of_pizzas, 
+	AVG(r.pickup_time::timestamp - f.order_time::timestamp) AS avg_prep_time
+FROM first_cte f
+JOIN runner_orders r
+ON f.order_id = r.order_id
+WHERE pickup_time <> 'null'
+GROUP BY f.no_of_pizzas
+ORDER BY no_of_pizzas;
+```
+
+### 4. What was the average distance travelled for each customer?
+```sql
+/*
+	We get the customer_id and distance from customer_orders and runner_orders 
+	respectively. Get the number component from the distance, cast as an integer.
+	Finally, we take the average of the distances for each customer_id.
+*/
+
+WITH first_cte AS (
+SELECT c.customer_id, 
+	CAST(SUBSTRING(r.distance FROM '[0-9]+') AS INTEGER) AS dist_km
+FROM customer_orders c
+JOIN runner_orders r
+ON c.order_id = r.order_id
+)
+SELECT customer_id, ROUND(AVG(dist_km), 2) AS avg_dist_trav_km
+FROM first_cte
+GROUP BY customer_id
+ORDER BY customer_id;
+```
+
+### 5. What was the difference between the longest and shortest delivery times for all orders?
+```sql
+/*
+	Create a first cte to clean up the duration column to show only numbers.
+	The second query gets the difference using max and min functions.
+*/
+
+WITH first_cte AS (
+SELECT CAST(SUBSTRING(duration FROM '[0-9]+') AS INTEGER) AS del_time
+FROM runner_orders
+)
+SELECT MAX(del_time) - MIN(del_time) AS diff_del_time
+FROM first_cte;
+```
+
+### 6. What was the average speed for each runner for each delivery and do you notice any trend for these values?
+```sql
+/*
+	The formula for speed = distance/time. These parameters are given in the
+	runner_orders table, where distance = distance, time = duration.
+	We will convert duration to hours, so that speed is in km/hr.
+*/
+
+WITH first_cte AS (
+SELECT runner_id, order_id, 
+	CAST(SUBSTRING(distance FROM '[0-9]+') AS INTEGER) AS distance,
+	CAST(SUBSTRING(duration FROM '[0-9]+') AS INTEGER)/60.0 AS time
+FROM runner_orders
+WHERE distance <> 'null' or duration <> 'null'
+)
+SELECT runner_id, order_id, ROUND((distance/time), 2) AS speed_km_h
+FROM first_cte
+ORDER BY runner_id ASC, order_id ASC;
+```
+
+### 7. What is the successful delivery percentage for each runner?
+```sql
+/*
+	We will use sum(case...) to satisfy orders in which there was no null.
+	successful delivery percentage = (completed orders/total assigned orders)*100
+*/
+
+WITH first_cte AS (
+SELECT runner_id, 
+	SUM(CASE WHEN pickup_time <> 'null' THEN 1 END) AS completed_orders, 
+	COUNT(*) AS total_ass_orders
+FROM runner_orders 
+GROUP BY runner_id
+)
+SELECT runner_id, 
+	(completed_orders/CAST(total_ass_orders AS FLOAT))*100 AS delivery_percentage
+FROM first_cte
+ORDER BY delivery_percentage DESC;
+```
