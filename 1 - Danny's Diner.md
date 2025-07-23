@@ -73,7 +73,7 @@ LIMIT 1;
 
 ### 5. Which item was the most popular for each customer?
 ```sql
-/* In order to handle this questiON, we did a combination of two commON table expressiONs (CTE) i.e. first_cte and second_cte
+/* In order to handle this question, we did a combination of two common table expressiONs (CTE) i.e. first_cte and second_cte
  to get the product_id with the most frquency for each customer, window function row_number() over(... came in handy */
 
 WITH first_cte AS
