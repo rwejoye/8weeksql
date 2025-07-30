@@ -316,3 +316,69 @@ SELECT runner_id,
 FROM first_cte
 ORDER BY delivery_percentage DESC;
 ```
+
+## C. INGREDIENT OPTIMISATION
+
+### 1. What are the standard ingredients for each pizza?
+```sql
+WITH first_cte AS (
+SELECT pizza_id, 
+	CAST(TRIM(UNNEST(STRING_TO_ARRAY(toppings, ','))) AS INTEGER) AS topping_id
+FROM pizza_recipes
+),
+second_cte AS (
+SELECT f.pizza_id, p.pizza_name, f.topping_id, t.topping_name
+FROM first_cte f
+JOIN pizza_toppings t
+ON f.topping_id = t.topping_id
+JOIN pizza_names p
+ON f.pizza_id = p.pizza_id
+ORDER BY f.pizza_id ASC, f.topping_id ASC)
+SELECT pizza_name, 
+	STRING_AGG(topping_name, ', ' ORDER BY topping_id) AS ingredients
+FROM second_cte
+GROUP BY pizza_name;
+```
+
+### 2. What was the most commonly added extra?
+```sql
+/*
+	We made use of the unnest and string_to array just like the question before.
+	Aggregation by count, and then sorting in a descending manner is the key.
+*/
+
+WITH first_cte AS (
+SELECT 
+	CAST(TRIM(UNNEST(STRING_TO_ARRAY(extras, ','))) AS INTEGER) AS extra_id 
+FROM customer_orders 
+WHERE extras <> 'null'
+)
+SELECT p.topping_name, COUNT(f.extra_id) AS extra_count
+FROM first_cte f
+JOIN pizza_toppings p
+ON f.extra_id = p.topping_id
+GROUP BY f.extra_id, p.topping_name
+ORDER BY extra_count DESC
+LIMIT 1;
+```
+
+### 3. What was the most common exclusion?
+```sql
+/*
+	Similar to Q2, except we are dealing with exclusions and not extra.
+*/
+
+WITH first_cte AS (
+SELECT 
+	CAST(TRIM(UNNEST(STRING_TO_ARRAY(exclusions, ','))) AS INTEGER) AS exclusion_id 
+FROM customer_orders 
+WHERE exclusions <> 'null'
+)
+SELECT p.topping_name, COUNT(f.exclusion_id) AS exclusion_count
+FROM first_cte f
+JOIN pizza_toppings p
+ON f.exclusion_id = p.topping_id
+GROUP BY f.exclusion_id, p.topping_name
+ORDER BY exclusion_count DESC
+LIMIT 1;
+```
