@@ -1,7 +1,7 @@
 # 8 Week SQL Challenge – My Solutions
 
 > 🛠️ **Work in Progress:** Final write-ups and polish coming soon.  
-> 📅 **Last updated:** July 23, 2025
+> 📅 **Last updated:** July 30, 2025
 
 Welcome to my personal repository for the [8 Week SQL Challenge](https://8weeksqlchallenge.com/). This repo contains my attempt at solving the SQL case studies designed by Danny Ma and contributors of the original challenge.
 
