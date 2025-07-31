@@ -1,15 +1,5 @@
 <h1 align="center">Case Study #2 – Pizza Runner</h1>
 
-<p align="center">
-  <img src="https://images.pexels.com/photos/1566837/pexels-photo-1566837.jpeg" 
-       alt="Pizza Runner" 
-       width="100%" 
-       height="390px" />
-</p>
-<p align="center">
-  <em>Photo by <a href="https://www.pexels.com/photo/shallow-focus-photography-of-several-pizzas-1566837/">Narda Yescas</a> on Pexels</em>
-</p>
-
 Solutions for this challenge are written in *PostgreSQL*.
 
 ## A. PIZZA METRICS
