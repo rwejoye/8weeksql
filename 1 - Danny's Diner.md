@@ -1,16 +1,5 @@
 <h1 align="center">Case Study #1 – Danny's Diner</h1>
 
-<p align="center">
-  <img src="https://images.unsplash.com/photo-1568018508399-e53bc8babdde?w=1200&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8amFwYW5lc2UlMjByZXN0YXVyYW50fGVufDB8fDB8fHww" 
-       alt="Danny's Diner" 
-       width="100%" 
-       height="340px" />
-</p>
-<p align="center">
-  <em>Photo by <a href="https://images.unsplash.com/photo-1568018508399-e53bc8babdde?q=80&w=1174&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D">Baiq Daling</a> on Unsplash</em>
-</p>
-
-
 Solutions for this challenge are written in **MySQL**.
 
 ### 1. What is the total amount each customer spent at the restaurant?
