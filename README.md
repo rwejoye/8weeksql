@@ -20,8 +20,8 @@ You can find the full challenge here (including the datasets used for each case)
 
 ## Tools Used
 
-- **MySQL** – used for all **odd-numbered** case studies  
-- **PostgreSQL** – used for all **even-numbered** case studies  
+- **MySQL**  
+- **PostgreSQL** 
 
 The SQL dialect used will also be indicated inside each solution folder.
 
@@ -29,14 +29,14 @@ The SQL dialect used will also be indicated inside each solution folder.
 
 ## Challenge List
 
-- Case 1 – Danny's Diner *(MySQL)*
-- Case 2 – Pizza Runner *(PostgreSQL)*
-- Case 3 – Foodie-Fi *(MySQL)*
-- Case 4 – Data Bank *(PostgreSQL)*
-- Case 5 – Data Mart *(MySQL)*
-- Case 6 – Clique Bait *(PostgreSQL)*
-- Case 7 – Balanced Tree *(MySQL)*
-- Case 8 – Fresh Segments *(PostgreSQL)*
+- Case 1 – Danny's Diner
+- Case 2 – Pizza Runner
+- Case 3 – Foodie-Fi
+- Case 4 – Data Bank
+- Case 5 – Data Mart
+- Case 6 – Clique Bait
+- Case 7 – Balanced Tree
+- Case 8 – Fresh Segments
 
 ---
 
