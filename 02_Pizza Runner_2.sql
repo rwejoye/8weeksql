@@ -1,20 +1,17 @@
-<h1 align="center">Case Study #2 – Pizza Runner</h1>
+-- ================================
+-- 🍕 Case Study #2 – Pizza Runner
+-- ================================
 
-Solutions for this challenge are written in *PostgreSQL*.
+-- ---------- A. PIZZA METRICS ----------
 
-## A. PIZZA METRICS
-
-### 1. How many pizzas were ordered?
-```sql
+-- [1] How many pizzas were ordered?
 -- count(*) gets the total count of all the rows, which corresponds to pizza ordered
 
 SELECT COUNT(*) 
 	AS total_pizzas_ordered
 FROM customer_orders;
-```
 
-### 2. How many unique customer orders were made?
-```sql
+-- [2] How many unique customer orders were made?
 /*
 	To handle this, we first do a distinct combination of order_id and customer_id,
 	this drops duplicate, and only gives us a unique order per customer.
@@ -23,10 +20,8 @@ FROM customer_orders;
 SELECT COUNT(DISTINCT(order_id, customer_id)) 
 	AS unique_customer_orders
 FROM customer_orders;
-```
 
-### 3. How many successful orders were delivered by each runner?
-```sql
+-- [3] How many successful orders were delivered by each runner?
 /*
 	From the runner_orders table, a successful order is made, when the pickup_time,
 	doesn't have a null value, or there was no cancellation either from restaurant,
@@ -38,10 +33,8 @@ FROM runner_orders
 WHERE pickup_time <> 'null' 
 GROUP BY runner_id
 ORDER BY runner_id;
-```
 
-### 4. How many of each type of pizza was delivered?
-```sql
+-- [4] How many of each type of pizza was delivered?
 /*
 	We combined three table, i.e. the customer_orders, runner_orders and pizza_names,
 	the first two tables were to get the successful deliveries, and the pizza_ids
@@ -56,10 +49,8 @@ JOIN pizza_names pi ON c.pizza_id = pi.pizza_id
 WHERE p.pickup_time <> 'null'
 GROUP BY pi.pizza_name
 ORDER BY pi.pizza_name;
-```
 
-### 5. How many Vegetarian and Meatlovers were ordered by each customer?
-```sql
+-- [5] How many Vegetarian and Meatlovers were ordered by each customer?
 -- We used a sum(case ...) to create new columns and count for each pizza type.
 
 SELECT customer_id,
@@ -68,10 +59,8 @@ SELECT customer_id,
 FROM customer_orders
 GROUP BY customer_id
 ORDER BY customer_id;
-```
 
-### 6. What was the maximum number of pizzas delivered in a single order?
-```sql
+-- [6] What was the maximum number of pizzas delivered in a single order?
 /* 
 	The max pizza delivered in a single order is the count of each order_ids, sorted in
 	a descending manner, and first entry (limit 1) gives the max.
@@ -82,10 +71,8 @@ FROM customer_orders
 GROUP BY order_id
 ORDER BY COUNT(order_id) DESC
 LIMIT 1;
-```
 
-### 7. For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
-```sql
+-- [7] For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
 /*
 	A pizza is considered changed if it has any valid exclusions or extras 
 	— meaning the customer removed or added ingredients. 
@@ -105,10 +92,8 @@ SELECT customer_id,
 FROM first_cte
 GROUP BY customer_id
 ORDER BY customer_id;
-```
 
-### 8. How many pizzas were delivered that had both exclusions and extras?
-```sql
+-- [8] How many pizzas were delivered that had both exclusions and extras?
 /*
 	Build from the delivered pizzas table, and then use regular expressions to match
 	digit characters for the exclusions and extras columns.
@@ -123,10 +108,8 @@ WHERE pickup_time <> 'null')
 SELECT COUNT(*) AS delivered_pizzas
 FROM first_cte
 WHERE exclusions ~ '[0-9]+' AND extras ~ '[0-9]+';
-```
 
-### 9. What was the total volume of pizzas ordered for each hour of the day?
-```sql
+-- [9] What was the total volume of pizzas ordered for each hour of the day?
 /*
 	We will use the extract function to get the hour from the order_time and
 	make a group by out of that.
@@ -140,10 +123,8 @@ SELECT order_hour, COUNT(order_hour) AS pizza_volume
 FROM first_cte
 GROUP BY order_hour
 ORDER BY order_hour;
-```
 
-### 10. What was the volume of orders for each day of the week?
-```sql
+-- [10] What was the volume of orders for each day of the week?
 /*
 	We will use the to_char function to get the Day of week from the order_time and
 	make a group by out of that. To get the correct ordering, we will get a little
@@ -159,12 +140,10 @@ SELECT day_of_week, COUNT(day_of_week) AS pizza_volume
 FROM first_cte
 GROUP BY day_of_week, weekday_num
 ORDER BY weekday_num;
-```
 
-## B. RUNNER AND CUSTOMER EXPERIENCE
+-- ---------- B. RUNNER AND CUSTOMER EXPERIENCE ----------
 
-### 1. How many runners signed up for each 1 week period? (i.e. week starts 2021-01-01)
-```sql
+-- [1] How many runners signed up for each 1 week period? (i.e. week starts 2021-01-01)
 /*
 	To handle this, we take the difference of the registration date of each runner,
 	and the base date (i.e. 2021-01-01). This difference divided by 7 and floored + 1,
@@ -183,10 +162,8 @@ SELECT week_no,
 FROM second_cte
 GROUP BY week_no
 ORDER BY week_no;
-```
 
-### 2. What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
-```sql
+-- [2] What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
 /*
 	Let arrival time = pickup_time - order_time.
 	We then take the average of this time for each runner.
@@ -204,10 +181,8 @@ SELECT runner_id, AVG(arrival_time) AS avg_arrival_time
 FROM first_cte
 GROUP BY runner_id
 ORDER BY runner_id;
-```
 
-### 3. Is there any relationship between the number of pizzas and how long the order takes to prepare?
-```sql
+-- [3] Is there any relationship between the number of pizzas and how long the order takes to prepare?
 /*
 	We combine the runner_orders table and customer_orders table, and take the diff
 	between the pickup and order time. (assuming prep_time = pickup_time - order_time)
@@ -229,10 +204,8 @@ ON f.order_id = r.order_id
 WHERE pickup_time <> 'null'
 GROUP BY f.no_of_pizzas
 ORDER BY no_of_pizzas;
-```
 
-### 4. What was the average distance travelled for each customer?
-```sql
+-- [4] What was the average distance travelled for each customer?
 /*
 	We get the customer_id and distance from customer_orders and runner_orders 
 	respectively. Get the number component from the distance, cast as an integer.
@@ -250,10 +223,8 @@ SELECT customer_id, ROUND(AVG(dist_km), 2) AS avg_dist_trav_km
 FROM first_cte
 GROUP BY customer_id
 ORDER BY customer_id;
-```
 
-### 5. What was the difference between the longest and shortest delivery times for all orders?
-```sql
+-- [5] What was the difference between the longest and shortest delivery times for all orders?
 /*
 	Create a first cte to clean up the duration column to show only numbers.
 	The second query gets the difference using max and min functions.
@@ -265,10 +236,8 @@ FROM runner_orders
 )
 SELECT MAX(del_time) - MIN(del_time) AS diff_del_time
 FROM first_cte;
-```
 
-### 6. What was the average speed for each runner for each delivery and do you notice any trend for these values?
-```sql
+-- [6] What was the average speed for each runner for each delivery and do you notice any trend for these values?
 /*
 	The formula for speed = distance/time. These parameters are given in the
 	runner_orders table, where distance = distance, time = duration.
@@ -285,10 +254,8 @@ WHERE distance <> 'null' or duration <> 'null'
 SELECT runner_id, order_id, ROUND((distance/time), 2) AS speed_km_h
 FROM first_cte
 ORDER BY runner_id ASC, order_id ASC;
-```
 
-### 7. What is the successful delivery percentage for each runner?
-```sql
+-- [7] What is the successful delivery percentage for each runner?
 /*
 	We will use sum(case...) to satisfy orders in which there was no null.
 	successful delivery percentage = (completed orders/total assigned orders)*100
@@ -305,12 +272,10 @@ SELECT runner_id,
 	(completed_orders/CAST(total_ass_orders AS FLOAT))*100 AS delivery_percentage
 FROM first_cte
 ORDER BY delivery_percentage DESC;
-```
 
-## C. INGREDIENT OPTIMISATION
+-- ---------- C. INGREDIENT OPTIMISATION ----------
 
-### 1. What are the standard ingredients for each pizza?
-```sql
+--[1] What are the standard ingredients for each pizza?
 WITH first_cte AS (
 SELECT pizza_id, 
 	CAST(TRIM(UNNEST(STRING_TO_ARRAY(toppings, ','))) AS INTEGER) AS topping_id
@@ -328,10 +293,8 @@ SELECT pizza_name,
 	STRING_AGG(topping_name, ', ' ORDER BY topping_id) AS ingredients
 FROM second_cte
 GROUP BY pizza_name;
-```
 
-### 2. What was the most commonly added extra?
-```sql
+-- [2] What was the most commonly added extra?
 /*
 	We made use of the unnest and string_to array just like the question before.
 	Aggregation by count, and then sorting in a descending manner is the key.
@@ -350,10 +313,8 @@ ON f.extra_id = p.topping_id
 GROUP BY f.extra_id, p.topping_name
 ORDER BY extra_count DESC
 LIMIT 1;
-```
 
-### 3. What was the most common exclusion?
-```sql
+-- [3] What was the most common exclusion?
 /*
 	Similar to Q2, except we are dealing with exclusions and not extra.
 */
@@ -371,4 +332,3 @@ ON f.exclusion_id = p.topping_id
 GROUP BY f.exclusion_id, p.topping_name
 ORDER BY exclusion_count DESC
 LIMIT 1;
-```
