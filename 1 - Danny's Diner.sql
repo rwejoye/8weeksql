@@ -1,9 +1,8 @@
-<h1 align="center">Case Study #1 – Danny's Diner</h1>
+-- Case Study #1 – Danny's Diner
+--Solutions for this challenge are written in **MySQL**.
 
-Solutions for this challenge are written in **MySQL**.
 
-### 1. What is the total amount each customer spent at the restaurant?
-```sql
+-- 1. What is the total amount each customer spent at the restaurant?
 -- in order to calculate this, we have to join the sales table with the menu table 
 
 SELECT s.customer_id,
@@ -11,20 +10,17 @@ SELECT s.customer_id,
 FROM sales s
 JOIN menu m ON s.product_id = m.product_id
 GROUP BY s.customer_id;
-```
 
-### 2. How many days has each customer visited the restaurant?
-```sql
+
+-- 2. How many days has each customer visited the restaurant?
 -- In order to solve this, we will group each customer_id by the distinct order date
 
 SELECT customer_id,
        COUNT(DISTINCT order_date) AS days_visited
 FROM sales
 GROUP BY customer_id;
-```
 
-### 3. What was the first item from the menu purchased by each customer?
-```sql
+-- 3. What was the first item from the menu purchased by each customer?
 /* We will use a ROW_NUMBER, to assign integer values to each rows in an ascending manner. however, we also need to partition by the 
  customer id, since we want to start FROM 1 for each customer, and then finally order by product_id and order_date to get the earliest date
  and smallest product_id (assuming smallest product_id is also a criteria). 
@@ -40,10 +36,8 @@ SELECT r.customer_id,
 FROM ranked_table r
 JOIN menu m ON r.product_id = m.product_id
 WHERE r.rn = 1;
-```
 
-### 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
-```sql
+-- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
 /* In order to handle this, we will group the product_id by the count of this product_id, we then proceed to join it to the menu table
  to get the product name */
 
@@ -58,10 +52,8 @@ FROM menu m
 JOIN purchase_freq p ON m.product_id = p.product_id
 ORDER BY count_purchased DESC
 LIMIT 1;
-```
 
-### 5. Which item was the most popular for each customer?
-```sql
+-- 5. Which item was the most popular for each customer?
 /* In order to handle this question, we did a combination of two common table expressiONs (CTE) i.e. first_cte and second_cte
  to get the product_id with the most frquency for each customer, window function row_number() over(... came in handy */
 
@@ -85,10 +77,8 @@ FROM second_cte s
 JOIN menu m ON s.product_id = m.product_id
 WHERE ranking = 1
 ORDER BY customer_id;
-```
 
-### 6. Which item was purchased first by the customer after they became a member?
-```sql
+-- 6. Which item was purchased first by the customer after they became a member?
 -- In order to tackle this problem, we use the same analogy as with the previous example. Using two cte, and a row_number window function.
 
 WITH first_cte AS
@@ -107,10 +97,8 @@ FROM second_cte s
 JOIN menu m ON s.product_id = m.product_id
 WHERE ranking = 1
 ORDER BY customer_id;
-```
 
-### 7. Which item was purchased just before the customer became a member?
-```sql
+-- 7. Which item was purchased just before the customer became a member?
 /* In order to tackle this problem, we have to follow similar methodology like question 6, however the expression
  WHERE m.join_date < s.order_date) now becomes m.join_date > s.order_date
  then instead of ranking by order date asc, we then rank by order date desc, to get the closest date to the join date */
@@ -131,10 +119,8 @@ FROM second_cte s
 JOIN menu m ON s.product_id = m.product_id
 WHERE ranking = 1
 ORDER BY customer_id;
-```
 
-### 8. What is the total items and amount spent for each member before they became a member?
-```sql
+-- 8. What is the total items and amount spent for each member before they became a member?
 /* In order to approach this, we have to combine all three tables to get key elements like before membership rows and price of items
  using a group by, we can aggregate the product_id by count to give total items, and the price column by sum to give total amount */
 
@@ -152,10 +138,8 @@ SELECT customer_id,
 FROM first_cte
 GROUP BY customer_id
 ORDER BY customer_id;
-```
 
-### 9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
-```sql
+-- 9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
 /* In order to handle this, we have to employ two CTEs, one to handle the inclusion of the price table, the order to do the CASE evaluation
  to satisfy the condition that each food item is 10 points per dollar, and sushi is 2x (10 points per dollar), i.e. 20 points per dollar */
 
@@ -175,10 +159,8 @@ SELECT customer_id,
        SUM(points) AS total_points
 FROM second_cte
 GROUP BY customer_id;
-```
 
-### 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items,  not just sushi - how many points do customer A and B have at the end of January?
-```sql
+-- 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items,  not just sushi - how many points do customer A and B have at the end of January?
 /* In order to address this problem, we need to get a column containing the one week duration. Then, we filter rows, depending on whether
  they fall under the range of join_date and one_week_duration, or not.
  Multiple ctes are introduced to address the problem, every step of the way. */
@@ -209,10 +191,8 @@ SELECT customer_id,
 FROM cte3
 GROUP BY customer_id
 ORDER BY customer_id ASC;
-```
 
-### Bonus Question 1. Join All The Things.
-```sql
+-- Bonus Question 1. Join All The Things.
 /* The idea is to join all three tables together, i.e. sales, menu and members. 
  use a left join, when joining members, so the customer_id c gets included.
  finally, create a condition where, if order date is on the join date or after, it's a Y, else an N */
@@ -235,10 +215,8 @@ FROM cte c
 ORDER BY customer_id ASC,
          order_date ASC,
          product_name ASC;
-```
 
-### Bonus Question 2. Rank All The Things.
-```sql
+-- Bonus Question 2. Rank All The Things.
 -- Same approach as bonus question 1, but case and window function is introduced to correctly assign the ranks.
 
 WITH cte AS
@@ -264,4 +242,3 @@ SELECT *,
        CASE WHEN member = 'Y' THEN RANK() OVER(PARTITION BY customer_id
                                                ORDER BY member DESC, order_date ASC) ELSE 'null' END AS ranking
 FROM cte2;
-```
