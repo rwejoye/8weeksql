@@ -9,8 +9,7 @@ SELECT
 	-- select the integer columns as is, no chance of problematic nulls
 	order_id, 
 	runner_id,
-	-- use a case statement to handle the varchar columns to handle all
-	-- the null cases: null, 'null' and ''
+	-- use a case statement to handle the varchar columns to handle all the null cases: null, 'null' and ''
 	(CASE 
 		WHEN pickup_time = 'null' 
 			OR pickup_time = '' 
@@ -45,8 +44,7 @@ WITH duped_table AS (
 			WHEN extras IS NULL OR extras = 'null' OR extras = '' THEN NULL
 			ELSE extras END AS extras,
 		order_time,
-		-- Identify duplicate rows. Note this table has a composite primary key, based
-		-- on order_id, customer_id, extras and exclusions
+		-- Identify duplicate rows. Note this table has a composite primary key, based on order_id, customer_id, extras and exclusions
 		ROW_NUMBER() OVER(
 						PARTITION BY order_id, customer_id, exclusions, extras
 						ORDER BY order_time) AS rn
@@ -103,10 +101,8 @@ ORDER BY
 
 -- [4] How many of each type of pizza was delivered?
 /*
-	We combined two views and one table, i.e. the clean_customer_orders, 
-	clean_runner_orders and pizza_names. The views were to get the 
-	successful deliveries, and the pizza_ids associated with it. 
-	The last table was to get the name of each pizza id.
+	We combined two views and one table, i.e. the clean_customer_orders,  clean_runner_orders and pizza_names. The views were to get the 
+	successful deliveries, and the pizza_ids associated with it. The last table was to get the name of each pizza id.
 */
 
 SELECT pi.pizza_name, 
@@ -160,8 +156,7 @@ LIMIT 1;
 
 -- [7] For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
 /*
-	1. Combine the clean_customer_orders and clean_runner_orders views to filter for
-	delivered orders.
+	1. Combine the clean_customer_orders and clean_runner_orders views to filter for delivered orders.
 	2. To get a pizza with a change, either or both the exclusions or extras columns,
 	have at least a value. If both columns for a customer is N/A, then there's no change.
 */
@@ -208,8 +203,7 @@ WHERE
 
 -- [9] What was the total volume of pizzas ordered for each hour of the day?
 /*
-	We will use the extract function to get the hour from the order_time and
-	make a group by out of that.
+	We will use the extract function to get the hour from the order_time and make a group by out of that.
 */
 
 SELECT
@@ -222,10 +216,8 @@ GROUP BY
 
 -- [10] What was the volume of orders for each day of the week?
 /*
-	1. To get the day of the week, i.e. Monday, etc, we use the TO_CHAR function
-	applied to the order time.
-	2. For ordering our result, by the correct order of the week, we use the 
-	EXTRACT function to extract by the DOW.
+	1. To get the day of the week, i.e. Monday, etc, we use the TO_CHAR function applied to the order time.
+	2. For ordering our result, by the correct order of the week, we use the EXTRACT function to extract by the DOW.
 */
 
 SELECT
@@ -268,8 +260,7 @@ ORDER BY
 -- [2] What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
 /*
 	1. The feature for pickup_time is a timestamp.
-	2. We will extract the minutes component from it and find the average for each
-	runner.
+	2. We will extract the minutes component from it and find the average for each runner.
 */
 
 SELECT
@@ -285,8 +276,7 @@ ORDER BY
 -- [3] Is there any relationship between the number of pizzas and how long the order takes to prepare?
 /*
 	1. Let preparaton time = pickup_time - order_time
-	2. To establish this relationship, we need to combine the clean_customer_orders and
-	the clean_runner_orders views.
+	2. To establish this relationship, we need to combine the clean_customer_orders and the clean_runner_orders views.
 */
 
 SELECT
@@ -340,8 +330,7 @@ ORDER BY
 
 -- [5] What was the difference between the longest and shortest delivery times for all orders?
 /*
-	1. The difference between the maximum and minimum duration from the
-	clean_runner_orders view.
+	1. The difference between the maximum and minimum duration from the clean_runner_orders view.
 */
 
 SELECT
@@ -354,10 +343,8 @@ WHERE
 
 -- [6] What was the average speed for each runner for each delivery and do you notice any trend for these values?
 /*
-	1. Speed = distance/time. For the clean_runner_orders view, 
-	distance = distance, time = duration.
-	2. To achieve speed in km/hr, we convert the duration to hours (i.e. duration/60).
-	Distance is good, as it is already in km.
+	1. Speed = distance/time. For the clean_runner_orders view,  distance = distance, time = duration.
+	2. To achieve speed in km/hr, we convert the duration to hours (i.e. duration/60). Distance is good, as it is already in km.
 */
 
 SELECT
@@ -374,8 +361,7 @@ WHERE
 
 -- [7] What is the successful delivery percentage for each runner?
 /*
-	1. Let successful delivery percentage
-	= (successful orders delivered/total assigned orders) * 100.
+	1. Let successful delivery percentage = (successful orders delivered/total assigned orders) * 100.
 	2. We will get these parameters for each runner and calculate the percentages.
 */
 
@@ -508,10 +494,8 @@ WHERE
 	exclusions and extras columns in the clean_customer_orders view.
 	2. We used cross lateral joins and regexp_split_to_table for some advanced
 	functionalities, getting the names of the exclusions and extras.
-	3. Multiple CTEs came in handy for combining different tables to give a total
-	result.
-	4. Finally, with CASE and nested concatenations, we were able to get the final 
-	result the question demanded.
+	3. Multiple CTEs came in handy for combining different tables to give a total result.
+	4. Finally, with CASE and nested concatenations, we were able to get the final result the question demanded.
 */
 
 WITH exclusions_cte AS (
