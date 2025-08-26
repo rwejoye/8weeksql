@@ -2,6 +2,67 @@
 -- 🍕 Case Study #2 – Pizza Runner
 -- ================================
 
+------------[view 1. : Runner Orders]--------------------
+DROP VIEW IF EXISTS clean_runner_orders;
+CREATE VIEW clean_runner_orders AS 
+SELECT
+	-- select the integer columns as is, no chance of problematic nulls
+	order_id, 
+	runner_id,
+	-- use a case statement to handle the varchar columns to handle all
+	-- the null cases: null, 'null' and ''
+	(CASE 
+		WHEN pickup_time = 'null' 
+			OR pickup_time = '' 
+				THEN NULL ELSE pickup_time END)::timestamp AS pickup_time,
+	COALESCE(CASE 
+				WHEN distance IS NULL OR distance = 'null' OR distance = '' THEN NULL
+				ELSE CAST(REGEXP_SUBSTR(distance, '^[0-9]+.?[0-9]+') AS FLOAT)
+			END, NULL) AS distance,	
+	COALESCE(CASE 
+				WHEN duration IS NULL OR duration = 'null' OR duration = '' THEN NULL
+				ELSE CAST(REGEXP_SUBSTR(duration, '^[0-9]+.?[0-9]+') AS FLOAT)
+			END, NULL) AS duration,	
+	CASE 
+		WHEN cancellation = 'null' OR cancellation = '' 
+				THEN NULL ELSE cancellation END AS cancellation	
+	FROM pizza_runner.runner_orders;
+
+
+------------------[view 2: Customer Orders]----------------------
+DROP VIEW IF EXISTS clean_customer_orders;
+CREATE VIEW clean_customer_orders AS
+WITH duped_table AS (
+	SELECT 
+		order_id, 
+		customer_id, 
+		pizza_id,
+		-- only exclusions and extras have problematic nulls, so we handle them
+		CASE 
+			WHEN exclusions IS NULL OR exclusions = 'null' OR exclusions = '' THEN NULL
+			ELSE exclusions END AS exclusions,
+		CASE 
+			WHEN extras IS NULL OR extras = 'null' OR extras = '' THEN NULL
+			ELSE extras END AS extras,
+		order_time,
+		-- Identify duplicate rows. Note this table has a composite primary key, based
+		-- on order_id, customer_id, extras and exclusions
+		ROW_NUMBER() OVER(
+						PARTITION BY order_id, customer_id, exclusions, extras
+						ORDER BY order_time) AS rn
+	FROM pizza_runner.customer_orders
+	)
+	SELECT
+		order_id,
+		customer_id,
+		pizza_id,
+		exclusions,
+		extras,
+		order_time
+	FROM duped_table
+	-- drop the rows containing duplicates
+	WHERE rn = 1;
+
 -- ---------- A. PIZZA METRICS ----------
 
 -- [1] How many pizzas were ordered?
@@ -9,7 +70,8 @@
 
 SELECT COUNT(*) 
 	AS total_pizzas_ordered
-FROM customer_orders;
+FROM 
+	clean_customer_orders;
 
 -- [2] How many unique customer orders were made?
 /*
@@ -19,46 +81,66 @@ FROM customer_orders;
 
 SELECT COUNT(DISTINCT(order_id, customer_id)) 
 	AS unique_customer_orders
-FROM customer_orders;
+FROM 
+	clean_customer_orders;
 
 -- [3] How many successful orders were delivered by each runner?
 /*
-	From the runner_orders table, a successful order is made, when the pickup_time,
-	doesn't have a null value, or there was no cancellation either from restaurant,
-	or customer in the cancellation column.
+	From the clean_runner_orders view, a successful order is made, when there was no 
+	cancellation either from restaurant or customer in the cancellation column.
 */
 
-SELECT runner_id, COUNT(runner_id) AS successful_orders 
-FROM runner_orders 
-WHERE pickup_time <> 'null' 
-GROUP BY runner_id
-ORDER BY runner_id;
+SELECT 
+	runner_id, COUNT(runner_id) AS successful_orders 
+FROM 
+	clean_runner_orders 
+WHERE 
+	cancellation IS NULL OR cancellation !~* 'cancel'
+GROUP BY 
+	runner_id
+ORDER BY 
+	runner_id;
 
 -- [4] How many of each type of pizza was delivered?
 /*
-	We combined three table, i.e. the customer_orders, runner_orders and pizza_names,
-	the first two tables were to get the successful deliveries, and the pizza_ids
-	associated with it. The last table was to get the name of each pizza id.
+	We combined two views and one table, i.e. the clean_customer_orders, 
+	clean_runner_orders and pizza_names. The views were to get the 
+	successful deliveries, and the pizza_ids associated with it. 
+	The last table was to get the name of each pizza id.
 */
 
 SELECT pi.pizza_name, 
 	COUNT(pi.pizza_name) AS no_delivered
-FROM customer_orders c
-JOIN runner_orders p ON c.order_id = p.order_id
-JOIN pizza_names pi ON c.pizza_id = pi.pizza_id
-WHERE p.pickup_time <> 'null'
-GROUP BY pi.pizza_name
-ORDER BY pi.pizza_name;
+FROM 
+	clean_customer_orders c
+JOIN 
+	clean_runner_orders p ON c.order_id = p.order_id
+JOIN 
+	pizza_names pi ON c.pizza_id = pi.pizza_id
+WHERE 
+	p.cancellation IS NULL OR cancellation !~* 'cancel'
+GROUP BY 
+	pi.pizza_name
+ORDER BY 
+	pi.pizza_name;
 
 -- [5] How many Vegetarian and Meatlovers were ordered by each customer?
 -- We used a sum(case ...) to create new columns and count for each pizza type.
 
-SELECT customer_id,
-	SUM(CASE WHEN pizza_id = 1 THEN 1 END) AS Meatlovers,
-	SUM(CASE WHEN pizza_id = 2 THEN 1 END) AS Vegetarian
-FROM customer_orders
-GROUP BY customer_id
-ORDER BY customer_id;
+SELECT
+	c.customer_id,
+	SUM(CASE WHEN p.pizza_name = 'Meatlovers' THEN 1 ELSE 0 END) AS Meatlovers,
+	SUM(CASE WHEN p.pizza_name = 'Vegetarian' THEN 1 ELSE 0 END) AS Vegetarian
+FROM 
+	clean_customer_orders c
+JOIN 
+	pizza_names p
+	ON 
+		c.pizza_id = p.pizza_id
+GROUP BY
+	c.customer_id
+ORDER BY
+	c.customer_id;
 
 -- [6] What was the maximum number of pizzas delivered in a single order?
 /* 
@@ -66,48 +148,63 @@ ORDER BY customer_id;
 	a descending manner, and first entry (limit 1) gives the max.
 */
 
-SELECT order_id, COUNT(order_id) AS max_order
-FROM customer_orders
-GROUP BY order_id
-ORDER BY COUNT(order_id) DESC
+SELECT 
+	COUNT(order_id) AS count_of_order
+FROM 
+	clean_customer_orders
+GROUP BY 
+	order_id
+ORDER BY 
+	COUNT(order_id) DESC
 LIMIT 1;
 
 -- [7] For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
 /*
-	A pizza is considered changed if it has any valid exclusions or extras 
-	— meaning the customer removed or added ingredients. 
-	If both exclusions and extras are empty, null, or just 'null' as text, 
-	then the pizza was ordered as-is with no changes.
+	1. Combine the clean_customer_orders and clean_runner_orders views to filter for
+	delivered orders.
+	2. To get a pizza with a change, either or both the exclusions or extras columns,
+	have at least a value. If both columns for a customer is N/A, then there's no change.
 */
 
-WITH first_cte AS (
-SELECT c.*
-FROM customer_orders c
-JOIN runner_orders r
-ON c.order_id = r.order_id
-WHERE pickup_time <> 'null')
-SELECT customer_id,
-	SUM(CASE WHEN exclusions ~ '[0-9]+' OR extras ~ '[0-9]+' THEN 1 END) AS change,
-	SUM(CASE WHEN exclusions !~ '[0-9]+' AND extras !~ '[0-9]+' THEN 1 END) no_change
-FROM first_cte
-GROUP BY customer_id
-ORDER BY customer_id;
+SELECT
+	cc.customer_id,
+	SUM(CASE 
+			WHEN exclusions IS NOT NULL OR extras IS NOT NULL
+				THEN 1 ELSE 0 
+		END) AS had_change,
+	SUM(CASE
+			WHEN exclusions IS NULL AND extras IS NULL
+				THEN 1 ELSE 0
+		END) AS had_no_change
+FROM
+	clean_runner_orders cr
+JOIN 
+	clean_customer_orders cc
+ON
+	cr.order_id = cc.order_id
+WHERE
+	cancellation IS NULL OR cancellation !~* 'cancel'
+GROUP BY
+	cc.customer_id;
 
 -- [8] How many pizzas were delivered that had both exclusions and extras?
 /*
-	Build from the delivered pizzas table, and then use regular expressions to match
-	digit characters for the exclusions and extras columns.
+	1. Filter the customer_orders table by joining with the runner_orders table
+	to get the pizzas that were delivered. i.e. no cancellation.
+	2. Do a count all on this table. i.e. COUNT(*)
 */
 
-WITH first_cte AS (
-SELECT c.*
-FROM customer_orders c
-JOIN runner_orders r
-ON c.order_id = r.order_id
-WHERE pickup_time <> 'null')
-SELECT COUNT(*) AS delivered_pizzas
-FROM first_cte
-WHERE exclusions ~ '[0-9]+' AND extras ~ '[0-9]+';
+SELECT
+	COUNT(cc.pizza_id) AS delivered_pizzas_all_toppings
+FROM
+	clean_runner_orders cr
+JOIN 
+	clean_customer_orders cc
+ON
+	cr.order_id = cc.order_id
+WHERE
+	(cr.cancellation IS NULL OR cr.cancellation !~* 'cancel')
+	AND cc.exclusions IS NOT NULL AND cc.extras IS NOT NULL;
 
 -- [9] What was the total volume of pizzas ordered for each hour of the day?
 /*
@@ -115,220 +212,387 @@ WHERE exclusions ~ '[0-9]+' AND extras ~ '[0-9]+';
 	make a group by out of that.
 */
 
-WITH first_cte AS (
-	SELECT EXTRACT(HOUR FROM order_time) AS order_hour 
-	FROM customer_orders
-)
-SELECT order_hour, COUNT(order_hour) AS pizza_volume
-FROM first_cte
-GROUP BY order_hour
-ORDER BY order_hour;
+SELECT
+	EXTRACT(HOUR FROM order_time) AS order_hour,
+	COUNT(*) AS volume_ordered
+FROM
+	clean_customer_orders
+GROUP BY
+	EXTRACT(HOUR FROM order_time);
 
 -- [10] What was the volume of orders for each day of the week?
 /*
-	We will use the to_char function to get the Day of week from the order_time and
-	make a group by out of that. To get the correct ordering, we will get a little
-	help from the weekday_num and then order by that.
+	1. To get the day of the week, i.e. Monday, etc, we use the TO_CHAR function
+	applied to the order time.
+	2. For ordering our result, by the correct order of the week, we use the 
+	EXTRACT function to extract by the DOW.
 */
 
-WITH first_cte AS (
-	SELECT TRIM(TO_CHAR(order_time, 'Day')) AS day_of_week,
-	EXTRACT(DOW FROM order_time) AS weekday_num
-	FROM customer_orders
-)
-SELECT day_of_week, COUNT(day_of_week) AS pizza_volume
-FROM first_cte
-GROUP BY day_of_week, weekday_num
-ORDER BY weekday_num;
+SELECT
+	TO_CHAR(order_time, 'Day') AS day_of_week,
+	COUNT(*) AS volume_pizzas_ordered
+FROM
+	clean_customer_orders
+GROUP BY
+	TO_CHAR(order_time, 'Day'), EXTRACT(DOW FROM order_time)
+ORDER BY
+	EXTRACT(DOW FROM order_time);
 
 -- ---------- B. RUNNER AND CUSTOMER EXPERIENCE ----------
 
 -- [1] How many runners signed up for each 1 week period? (i.e. week starts 2021-01-01)
 /*
-	To handle this, we take the difference of the registration date of each runner,
-	and the base date (i.e. 2021-01-01). This difference divided by 7 and floored + 1,
-	will give the week number of registration, which we can then group the runners by.
+	1. We will get the one week period for each row.
+	2. Runners will be grouped according to their occurence in the one week period.
 */
 
-WITH first_cte AS (
-SELECT runner_id,
-	registration_date - CAST('2021-01-01' AS DATE) AS days_diff
-FROM runners),
-second_cte AS (
-SELECT *, FLOOR(days_diff/7) + 1 AS week_no
-FROM first_cte)
-SELECT week_no, 
-	count(week_no) AS no_runners
-FROM second_cte
-GROUP BY week_no
-ORDER BY week_no;
+SELECT
+	week_starts,
+	week_ends,
+	COUNT(runner_id) AS no_of_runners
+FROM (
+	SELECT
+		'2021-01-01'::DATE + 
+			((registration_date - '2021-01-01'::DATE)/7) * 7 AS week_starts,
+		'2021-01-01'::DATE + 
+			((registration_date - '2021-01-01'::DATE)/7) * 7 + 6 AS week_ends,
+			runner_id
+	FROM
+		runners) runners_week_table
+GROUP BY
+	week_starts, 
+	week_ends
+ORDER BY
+	week_starts;
 
 -- [2] What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
 /*
-	Let arrival time = pickup_time - order_time.
-	We then take the average of this time for each runner.
+	1. The feature for pickup_time is a timestamp.
+	2. We will extract the minutes component from it and find the average for each
+	runner.
 */
 
-WITH first_cte AS (
-SELECT r.runner_id, 
-	r.pickup_time::timestamp - c.order_time::timestamp AS arrival_time
-FROM runner_orders r
-JOIN customer_orders c
-ON r.order_id = c.order_id
-WHERE pickup_time <> 'null'
-)
-SELECT runner_id, AVG(arrival_time) AS avg_arrival_time
-FROM first_cte
-GROUP BY runner_id
-ORDER BY runner_id;
+SELECT
+	runner_id,
+	ROUND(AVG(EXTRACT(MINUTES FROM pickup_time)), 2) AS avg_min_picku_time
+FROM 
+	clean_runner_orders
+GROUP BY
+	runner_id
+ORDER BY
+	runner_id;
 
 -- [3] Is there any relationship between the number of pizzas and how long the order takes to prepare?
 /*
-	We combine the runner_orders table and customer_orders table, and take the diff
-	between the pickup and order time. (assuming prep_time = pickup_time - order_time)
-	From the results shown in the query, there is indeed a relationship between
-	the no_of_pizzas ordered and the time it takes to prepare.
+	1. Let preparaton time = pickup_time - order_time
+	2. To establish this relationship, we need to combine the clean_customer_orders and
+	the clean_runner_orders views.
 */
 
-WITH first_cte AS (
-SELECT order_id, COUNT(order_id) AS no_of_pizzas, order_time
-FROM customer_orders
-GROUP BY order_id, order_time
-ORDER BY order_id ASC
-)
-SELECT f.no_of_pizzas, 
-	AVG(r.pickup_time::timestamp - f.order_time::timestamp) AS avg_prep_time
-FROM first_cte f
-JOIN runner_orders r
-ON f.order_id = r.order_id
-WHERE pickup_time <> 'null'
-GROUP BY f.no_of_pizzas
-ORDER BY no_of_pizzas;
+SELECT
+	no_of_orders,
+	AVG(prep_time) AS avg_prep_time
+FROM
+	(SELECT
+		cc.order_id,
+		COUNT(cc.order_id) AS no_of_orders,
+		-- average preparation time for each order_id group
+		AVG(DATE_TRUNC('minute',cr.pickup_time - cc.order_time)) AS prep_time
+	FROM
+		clean_customer_orders cc
+	JOIN
+		clean_runner_orders cr
+	ON
+		cc.order_id = cr.order_id
+	WHERE
+		-- removes the rows where an order was cancelled
+		cr.cancellation IS NULL
+		OR cr.cancellation !~* 'cancel'
+	GROUP BY
+		cc.order_id) preptime_table
+GROUP BY
+	no_of_orders
+ORDER BY
+	no_of_orders DESC;
 
 -- [4] What was the average distance travelled for each customer?
 /*
-	We get the customer_id and distance from customer_orders and runner_orders 
-	respectively. Get the number component from the distance, cast as an integer.
-	Finally, we take the average of the distances for each customer_id.
+	1.We need to combine the clean_customer_orders and clean_runner_orders views.
+	2. For each customer, we take the average of distance.
 */
 
-WITH first_cte AS (
-SELECT c.customer_id, 
-	CAST(SUBSTRING(r.distance FROM '[0-9]+') AS INTEGER) AS dist_km
-FROM customer_orders c
-JOIN runner_orders r
-ON c.order_id = r.order_id
-)
-SELECT customer_id, ROUND(AVG(dist_km), 2) AS avg_dist_trav_km
-FROM first_cte
-GROUP BY customer_id
-ORDER BY customer_id;
+SELECT
+	cc.customer_id,
+	ROUND(AVG(cr.distance)) AS avg_dist_travelled
+FROM
+	clean_customer_orders cc
+JOIN
+	clean_runner_orders cr
+ON
+	cc.order_id = cr.order_id
+WHERE
+	cr.cancellation IS NULL
+	OR cr.cancellation !~* 'cancel'
+GROUP BY
+	cc.customer_id
+ORDER BY
+	cc.customer_id;
 
 -- [5] What was the difference between the longest and shortest delivery times for all orders?
 /*
-	Create a first cte to clean up the duration column to show only numbers.
-	The second query gets the difference using max and min functions.
+	1. The difference between the maximum and minimum duration from the
+	clean_runner_orders view.
 */
 
-WITH first_cte AS (
-SELECT CAST(SUBSTRING(duration FROM '[0-9]+') AS INTEGER) AS del_time
-FROM runner_orders
-)
-SELECT MAX(del_time) - MIN(del_time) AS diff_del_time
-FROM first_cte;
+SELECT
+	MAX(duration) - MIN(duration) AS diff_delivery_time
+FROM
+	clean_runner_orders
+WHERE
+	cancellation IS NULL
+	OR cancellation !~* 'cancel';
 
 -- [6] What was the average speed for each runner for each delivery and do you notice any trend for these values?
 /*
-	The formula for speed = distance/time. These parameters are given in the
-	runner_orders table, where distance = distance, time = duration.
-	We will convert duration to hours, so that speed is in km/hr.
+	1. Speed = distance/time. For the clean_runner_orders view, 
+	distance = distance, time = duration.
+	2. To achieve speed in km/hr, we convert the duration to hours (i.e. duration/60).
+	Distance is good, as it is already in km.
 */
 
-WITH first_cte AS (
-SELECT runner_id, order_id, 
-	CAST(SUBSTRING(distance FROM '[0-9]+') AS INTEGER) AS distance,
-	CAST(SUBSTRING(duration FROM '[0-9]+') AS INTEGER)/60.0 AS time
-FROM runner_orders
-WHERE distance <> 'null' or duration <> 'null'
-)
-SELECT runner_id, order_id, ROUND((distance/time), 2) AS speed_km_h
-FROM first_cte
-ORDER BY runner_id ASC, order_id ASC;
+SELECT
+	runner_id,
+	order_id,
+	/* conversion to speed takes place next: multiplied by 1.0 to force floating-point
+	division */
+	ROUND((distance*1.0/(NULLIF(duration, 0)/60))::NUMERIC, 1) AS speed
+FROM
+	clean_runner_orders
+WHERE
+	cancellation IS NULL
+	OR cancellation !~* 'cancel';
 
 -- [7] What is the successful delivery percentage for each runner?
 /*
-	We will use sum(case...) to satisfy orders in which there was no null.
-	successful delivery percentage = (completed orders/total assigned orders)*100
+	1. Let successful delivery percentage
+	= (successful orders delivered/total assigned orders) * 100.
+	2. We will get these parameters for each runner and calculate the percentages.
 */
 
-WITH first_cte AS (
-SELECT runner_id, 
-	SUM(CASE WHEN pickup_time <> 'null' THEN 1 END) AS completed_orders, 
-	COUNT(*) AS total_ass_orders
-FROM runner_orders 
-GROUP BY runner_id
+WITH orders_status_table AS (
+	SELECT
+		runner_id,
+		COUNT(*) FILTER(WHERE cancellation IS NULL) AS successful_orders,
+		COUNT(*) AS assigned_orders
+	FROM
+		clean_runner_orders
+	GROUP BY
+		runner_id
 )
-SELECT runner_id, 
-	(completed_orders/CAST(total_ass_orders AS FLOAT))*100 AS delivery_percentage
-FROM first_cte
-ORDER BY delivery_percentage DESC;
+SELECT
+	runner_id,
+	ROUND((successful_orders*1.0/NULLIF(assigned_orders, 0))*100, 2)
+		AS successful_delivery_percentage
+FROM
+	orders_status_table
+ORDER BY
+	runner_id;
 
 -- ---------- C. INGREDIENT OPTIMISATION ----------
 
 --[1] What are the standard ingredients for each pizza?
-WITH first_cte AS (
-SELECT pizza_id, 
-	CAST(TRIM(UNNEST(STRING_TO_ARRAY(toppings, ','))) AS INTEGER) AS topping_id
-FROM pizza_recipes
-),
-second_cte AS (
-SELECT f.pizza_id, p.pizza_name, f.topping_id, t.topping_name
-FROM first_cte f
-JOIN pizza_toppings t
-ON f.topping_id = t.topping_id
-JOIN pizza_names p
-ON f.pizza_id = p.pizza_id
-ORDER BY f.pizza_id ASC, f.topping_id ASC)
-SELECT pizza_name, 
-	STRING_AGG(topping_name, ', ' ORDER BY topping_id) AS ingredients
-FROM second_cte
-GROUP BY pizza_name;
+/*
+	1. To analyse this problem, we make use of the pizza_recipes and pizza_toppings tables.
+	2. Unnest the entries of the toppings in the pizza_recipes; get what they stand for from the pizza_toppings table, and then aggregate.
+*/
+
+SELECT
+	sp.pizza_id,
+	STRING_AGG(pt.topping_name, ', ') AS toppings
+FROM(
+	SELECT
+		pizza_id,
+		/* this step: separate the toppings by the delimiter ',', convert each separation
+		 to an array, and trim any trailing or leading spaces, then cast to INT */
+		TRIM(UNNEST(STRING_TO_ARRAY(toppings, ',')))::INT AS topping_id
+	FROM
+		pizza_recipes) sp
+JOIN
+	pizza_toppings pt
+ON
+	sp.topping_id = pt.topping_id
+GROUP BY
+	sp.pizza_id
+ORDER BY
+	sp.pizza_id;
 
 -- [2] What was the most commonly added extra?
 /*
-	We made use of the unnest and string_to array just like the question before.
-	Aggregation by count, and then sorting in a descending manner is the key.
+	1. Made use of the functions to unnest the extras, like we did in the previous question.
+	2. Finally, we used a rank window function, to get the most ordered extra. This was used instead of desc limit 1, 
+	because of situations where the most ordered extra is more than one.
 */
 
-WITH first_cte AS (
-SELECT 
-	CAST(TRIM(UNNEST(STRING_TO_ARRAY(extras, ','))) AS INTEGER) AS extra_id 
-FROM customer_orders 
-WHERE extras <> 'null'
+WITH extras_table AS (
+	SELECT 
+		CAST(TRIM(UNNEST(STRING_TO_ARRAY(extras, ','))) AS INTEGER) AS extras_id
+	FROM 
+		clean_customer_orders
+),
+extras_rank_table AS (
+	SELECT
+		pt.topping_name,
+		COUNT(pt.topping_name) AS no_extras,
+		RANK() OVER(ORDER BY COUNT(pt.topping_name) DESC)
+			AS rn
+	FROM
+		extras_table e
+	JOIN
+		pizza_toppings pt
+	ON
+		e.extras_id = pt.topping_id
+	GROUP BY
+		e.extras_id, pt.topping_name
 )
-SELECT p.topping_name, COUNT(f.extra_id) AS extra_count
-FROM first_cte f
-JOIN pizza_toppings p
-ON f.extra_id = p.topping_id
-GROUP BY f.extra_id, p.topping_name
-ORDER BY extra_count DESC
-LIMIT 1;
+SELECT
+	topping_name,
+	no_extras
+FROM
+	extras_rank_table
+WHERE
+	rn = 1;
 
 -- [3] What was the most common exclusion?
 /*
 	Similar to Q2, except we are dealing with exclusions and not extra.
 */
 
-WITH first_cte AS (
-SELECT 
-	CAST(TRIM(UNNEST(STRING_TO_ARRAY(exclusions, ','))) AS INTEGER) AS exclusion_id 
-FROM customer_orders 
-WHERE exclusions <> 'null'
+WITH exclusions_table AS (
+	SELECT 
+		CAST(TRIM(UNNEST(STRING_TO_ARRAY(exclusions, ','))) AS INTEGER) AS exclusions_id
+	FROM 
+		clean_customer_orders
+),
+exclusions_rank_table AS (
+	SELECT
+		pt.topping_name,
+		COUNT(pt.topping_name) AS no_exclusions,
+		RANK() OVER(ORDER BY COUNT(pt.topping_name) DESC)
+			AS rn
+	FROM
+		exclusions_table e
+	JOIN
+		pizza_toppings pt
+	ON
+		e.exclusions_id = pt.topping_id
+	GROUP BY
+		e.exclusions_id, pt.topping_name
 )
-SELECT p.topping_name, COUNT(f.exclusion_id) AS exclusion_count
-FROM first_cte f
-JOIN pizza_toppings p
-ON f.exclusion_id = p.topping_id
-GROUP BY f.exclusion_id, p.topping_name
-ORDER BY exclusion_count DESC
-LIMIT 1;
+SELECT
+	topping_name,
+	no_exclusions
+FROM
+	exclusions_rank_table
+WHERE
+	rn = 1;
+
+/* 4. Generate an order item for each record in the customers_orders table in the format of one of the following:
+		* Meat Lovers
+		* Meat Lovers - Exclude Beef
+		* Meat Lovers - Extra Bacon
+		* Meat Lovers - Exclude Cheese, Bacon - Extra Mushroom, Peppers
+*/
+
+/*
+	1. We need to replace the ids with their actual names across the pizza_id,
+	exclusions and extras columns in the clean_customer_orders view.
+	2. We used cross lateral joins and regexp_split_to_table for some advanced
+	functionalities, getting the names of the exclusions and extras.
+	3. Multiple CTEs came in handy for combining different tables to give a total
+	result.
+	4. Finally, with CASE and nested concatenations, we were able to get the final 
+	result the question demanded.
+*/
+
+WITH exclusions_cte AS (
+	SELECT
+		cc.order_id,
+		cc.customer_id,
+		cc.pizza_id,
+		STRING_AGG(pt.topping_name, ', ') AS exclusions_name,
+		ROW_NUMBER() OVER(ORDER BY cc.order_id) AS rn_exclusions
+	FROM
+		clean_customer_orders cc
+	CROSS JOIN LATERAL(                                                                  
+		SELECT
+			TRIM(x)::INT AS exclusions_id
+		FROM
+			REGEXP_SPLIT_TO_TABLE(coalesce(cc.exclusions, '0'), ',') AS x
+	) exclusions_part
+	LEFT JOIN
+		pizza_toppings pt
+	ON
+		exclusions_part.exclusions_id = pt.topping_id
+	GROUP BY
+		cc.order_id, cc.customer_id, cc.pizza_id, cc.exclusions, cc.extras
+	ORDER BY
+		cc.order_id
+),
+extras_cte AS (
+	SELECT
+		cc.order_id,
+		cc.customer_id,
+		cc.pizza_id,
+		STRING_AGG(pt.topping_name, ', ') AS extras_name,
+		ROW_NUMBER() OVER(ORDER BY cc.order_id) AS rn_extras
+	FROM
+		clean_customer_orders cc
+	CROSS JOIN LATERAL(                                                                  
+		SELECT
+			TRIM(x)::INT AS extras_id
+		FROM
+			REGEXP_SPLIT_TO_TABLE(coalesce(cc.extras, '0'), ',') AS x
+	) extras_part
+	LEFT JOIN
+		pizza_toppings pt
+	ON
+		extras_part.extras_id = pt.topping_id
+	GROUP BY
+		cc.order_id, cc.customer_id, cc.pizza_id, cc.exclusions, cc.extras
+	ORDER BY
+		cc.order_id	
+),
+third_cte AS (
+	SELECT
+		exc.order_id,
+		pn.pizza_name,
+		exc.exclusions_name,
+		ext.extras_name
+	FROM
+		exclusions_cte exc
+	JOIN 
+		extras_cte ext
+	ON
+		exc.rn_exclusions = ext.rn_extras
+	JOIN
+		pizza_names pn
+	ON
+		exc.pizza_id = pn.pizza_id
+)
+SELECT
+	order_id,
+	CONCAT(
+		pizza_name,
+		CASE
+			WHEN exclusions_name IS NOT NULL THEN ' - Exclude ' || exclusions_name
+			ELSE ''
+		END,
+		CASE
+			WHEN extras_name IS NOT NULL THEN ' - Extra ' || extras_name
+			ELSE ''
+		END
+	) AS order_item
+FROM 
+	third_cte
+ORDER BY
+	order_id;
