@@ -580,3 +580,228 @@ FROM
 	third_cte
 ORDER BY
 	order_id;
+
+-- ---------- D. PRICING AND RATINGS ----------
+
+/* 1. If a Meat Lovers pizza costs $12 and Vegetarian costs $10 and there were no 
+charges for changes - how much money has Pizza Runner made so far if there are no 
+delivery fees? */
+
+/*
+	1. Combining tables and views, to get the pizza_name for every pizza_id that
+	was delivered.
+	2. Use a case statement to assign prices to the different types of pizza and sum.
+*/
+
+SELECT
+	SUM(
+		CASE
+			WHEN pn.pizza_name = 'Meatlovers' THEN 12
+			WHEN pn.pizza_name = 'Vegetarian' THEN 10
+		END
+		) AS revenue_generated
+FROM
+	clean_customer_orders cc
+JOIN
+	pizza_names pn
+ON
+	cc.pizza_id = pn.pizza_id
+JOIN
+	clean_runner_orders cr
+ON
+	cc.order_id = cr.order_id
+WHERE
+	cr.cancellation IS NULL
+	OR cr.cancellation !~* 'cancel';
+	
+
+ /* 2. What if there was an additional $1 charge for any pizza extras?
+	Add cheese is $1 extra */
+
+/*
+	1. We combine the logic from the previous question and question C4.
+	2. Since each extra is $1, therefore means the count is equivalent to the extra
+	amount paid.
+*/
+
+WITH first_cte AS (
+	SELECT
+		CASE
+			WHEN pn.pizza_name = 'Meatlovers' THEN 12
+			WHEN pn.pizza_name = 'Vegetarian' THEN 10
+		END AS pizza_prices,
+		COUNT(cc.extras) AS extras_price
+	FROM
+		clean_customer_orders cc
+	CROSS JOIN LATERAL(                                                                  
+		SELECT
+			TRIM(x)::INT AS extras_id
+		FROM
+			REGEXP_SPLIT_TO_TABLE(coalesce(cc.extras, '0'), ',') AS x
+	) extras_part
+	JOIN
+		clean_runner_orders cr
+	ON
+		cc.order_id = cr.order_id
+	JOIN
+		pizza_names pn
+	ON
+		cc.pizza_id = pn.pizza_id
+	WHERE
+		cr.cancellation IS NULL
+		OR cr.cancellation !~* 'cancel'
+	GROUP BY
+			cc.order_id, cc.customer_id, pn.pizza_name, cc.exclusions, cc.extras
+)
+SELECT
+	SUM(pizza_prices + extras_price) AS revenue_generated
+FROM
+	first_cte;
+
+
+/*
+	3. The Pizza Runner team now wants to add an additional ratings system that 
+	allows customers to rate their runner, how would you design an additional table 
+	for this new dataset - generate a schema for this new table and insert your own 
+	data for ratings for each successful customer order between 1 to 5.
+*/
+
+-- 1. To avoid distorting the original table structure, we used a temporary table.
+
+CREATE TEMPORARY TABLE runner_rating(
+	customer_id INTEGER,
+	runner_id INTEGER,
+	rating INTEGER
+);
+
+INSERT INTO
+runner_rating
+VALUES
+(101, 1, 3),
+(102, 1, 5),
+(102, 2, 3),
+(103, 2, 4),
+(104, 1, 5),
+(104, 3, 2),
+(105, 2, 4);
+
+/*
+	4.	Using your newly generated table - can you join all of the information together 
+		to form a table which has the following information for successful deliveries?
+		customer_id
+		order_id
+		runner_id
+		rating
+		order_time
+		pickup_time
+		Time between order and pickup
+		Delivery duration
+		Average speed
+		Total number of pizzas
+*/
+
+-- With the help of the previous questions, we are able to figure this one out.
+
+SELECT
+	cc.customer_id,
+	cc.order_id,
+	cr.runner_id,
+	rr.rating,
+	cc.order_time,
+	cr.pickup_time,
+	cr.pickup_time - cc.order_time AS timebtw_pickup_and_order,
+	AVG(cr.duration) AS delivery_duration,
+	AVG(cr.distance*1.0/NULLIF((cr.duration/60), 0)) AS avg_speed,
+	COUNT(*) AS total_number_of_pizzas
+FROM
+	clean_customer_orders cc
+JOIN
+	clean_runner_orders cr
+ON
+	cc.order_id = cr.order_id
+JOIN
+	runner_rating rr
+ON
+	cc.customer_id = rr.customer_id
+	AND cr.runner_id = rr.runner_id
+WHERE
+	cr.cancellation IS NULL	
+	OR cr.cancellation !~* 'cancel'
+GROUP BY
+	cc.customer_id, cc.order_id, cr.runner_id, cc.order_time, 
+	cr.pickup_time, rr.rating
+ORDER BY
+	cc.order_id;
+
+
+/*
+	5. If a Meat Lovers pizza was $12 and Vegetarian $10 fixed prices with no cost 
+	for extras and each runner is paid $0.30 per kilometre traveled - how much money 
+	does Pizza Runner have left over after these deliveries?
+*/
+
+-- With the help of previous questions, we are able to figure this one out.
+
+WITH pizza_prices AS (
+	SELECT
+		SUM(CASE
+			WHEN pn.pizza_name = 'Meatlovers' THEN 12
+			WHEN pn.pizza_name = 'Vegetarian' THEN 10
+		END)
+			AS pizza_prices,
+		cr.distance * 0.3 AS delivery_cost
+	FROM
+		clean_customer_orders cc
+	JOIN
+		pizza_names pn
+	ON
+		cc.pizza_id = pn.pizza_id
+	JOIN
+		clean_runner_orders cr
+	ON
+		cc.order_id = cr.order_id
+	WHERE
+		cr.cancellation IS NULL
+		OR cr.cancellation !~* 'cancel'
+	GROUP BY
+		cc.order_id, cc.customer_id, cr.distance
+	ORDER BY
+		cc.order_id
+)
+SELECT
+	SUM(pizza_prices - delivery_cost)
+FROM 
+	pizza_prices;
+
+-- ---------- E. BONUS QUESTIONS ----------
+
+/*
+	If Danny wants to expand his range of pizzas - how would this impact the existing 
+	data design? Write an INSERT statement to demonstrate what would happen if a 
+	new Supreme pizza with all the toppings was added to the Pizza Runner menu?
+*/
+
+/* 1. Let's use temporary table for this problem so that it doesn't affect our original
+   2. add a row for supreme pizza to temp_pizza_names (derived from pizza_names) */
+DROP TABLE IF EXISTS temp_pizza_names;
+CREATE TEMPORARY TABLE temp_pizza_names AS
+SELECT 
+	*
+FROM
+	pizza_names;
+
+INSERT INTO temp_pizza_names
+VALUES
+(3, 'Supreme');
+
+-- Add supreme pizza recipes to temp_pizza_recipes (derived from pizza_recipes)
+DROP TABLE IF EXISTS temp_pizza_recipes;
+CREATE TEMPORARY TABLE temp_pizza_recipes AS
+SELECT 
+	*
+FROM
+	pizza_recipes;
+
+INSERT INTO temp_pizza_recipes
+VALUES
+(3, '1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12');
