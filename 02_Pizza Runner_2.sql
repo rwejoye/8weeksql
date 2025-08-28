@@ -581,9 +581,8 @@ FROM
 ORDER BY
 	order_id;
 
-/* 5. Generate an alphabetically ordered comma separated ingredient list for 
-each pizza order from the customer_orders table and add a 2x in front of any 
-relevant ingredients
+/* 5. Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x 
+in front of any relevant ingredients
 For example: "Meat Lovers: 2xBacon, Beef, ... , Salami" */
 
 /*
@@ -738,6 +737,136 @@ GROUP BY
     pizza_name,
     order_id;
 
+/* 6. What is the total quantity of each ingredient used in all delivered pizzas sorted by most frequent first? */
+
+WITH pizzas_cte AS (
+    SELECT
+        cc.order_id,
+        pn.pizza_name,
+        ARRAY_AGG(pt.topping_name ORDER BY pt.topping_id) as ingredients,
+        ROW_NUMBER() OVER(ORDER BY cc.order_id, cc.customer_id, cc.pizza_id) as rn
+    FROM
+        clean_customer_orders as cc
+    JOIN
+        pizza_recipes as pr
+    ON
+        cc.pizza_id = pr.pizza_id
+    CROSS JOIN LATERAL (
+        SELECT
+            TRIM(x)::INT as ing_id
+        FROM
+            REGEXP_SPLIT_TO_TABLE(pr.toppings, ',') as x
+    ) as ing_table
+    JOIN
+        pizza_toppings as pt
+    ON
+        ing_table.ing_id = pt.topping_id
+    JOIN
+        pizza_names as pn
+    ON
+        cc.pizza_id = pn.pizza_id
+    GROUP BY
+        cc.customer_id,
+        cc.order_id,
+        cc.pizza_id,
+        cc.extras,
+        cc.exclusions,
+        pn.pizza_name
+    ORDER BY
+        cc.order_id
+),
+exclusions_cte AS (
+    SELECT
+        ARRAY_AGG(COALESCE(pt.topping_name,'') ORDER BY pt.topping_id) as exclusions_name,
+        ROW_NUMBER() OVER(ORDER BY cc.order_id, cc.customer_id, cc.pizza_id) as rn
+    FROM
+        clean_customer_orders as cc
+    CROSS JOIN LATERAL (
+        SELECT
+            TRIM(x)::INT as exclusions_id
+        FROM
+            REGEXP_SPLIT_TO_TABLE(COALESCE(cc.exclusions, '0'), ',') as x
+    ) as exclusions_part
+    LEFT JOIN
+        pizza_toppings as pt
+    ON
+        exclusions_part.exclusions_id = pt.topping_id
+    GROUP BY
+        cc.order_id,
+        cc.customer_id,
+        cc.pizza_id,
+        cc.exclusions,
+        cc.extras
+    ORDER BY
+        cc.order_id
+),
+extras_cte AS (
+    SELECT
+        ARRAY_AGG(COALESCE(pt.topping_name,'') ORDER BY pt.topping_id) as extras_name,
+        ROW_NUMBER() OVER(ORDER BY cc.order_id, cc.customer_id, cc.pizza_id) as rn
+    FROM
+        clean_customer_orders as cc
+    CROSS JOIN LATERAL (
+        SELECT
+            TRIM(x)::INT as extras_id
+        FROM
+            REGEXP_SPLIT_TO_TABLE(COALESCE(cc.extras, '0'), ',') as x
+    ) as extras_part
+    LEFT JOIN
+        pizza_toppings as pt
+    ON
+        extras_part.extras_id = pt.topping_id
+    GROUP BY
+        cc.order_id,
+        cc.customer_id,
+        cc.pizza_id,
+        cc.exclusions,
+        cc.extras
+    ORDER BY
+        cc.order_id
+),
+full_cte as (
+    SELECT
+        p.rn as id,
+        p.order_id,
+        p.pizza_name,
+        p.ingredients || ext.extras_name as all_ing,
+        exc.exclusions_name
+    FROM
+        pizzas_cte as p
+    JOIN
+        extras_cte as ext
+    ON
+        p.rn = ext.rn
+    JOIN
+        exclusions_cte as exc
+    ON
+        COALESCE(p.rn, ext.rn) = exc.rn
+)
+SELECT
+	p.ingredients,
+	COUNT(p.ingredients) as no_items
+FROM
+	full_cte as f
+LEFT JOIN LATERAL UNNEST(f.all_ing) as p(ingredients) ON TRUE
+WHERE
+	NOT (p.ingredients = ANY(COALESCE(f.exclusions_name, '{}'))) 
+	AND p.ingredients <> ''
+	AND f.order_id IN (
+		SELECT
+			order_id
+		FROM
+			clean_runner_orders
+		WHERE
+			cancellation IS NULL
+			OR cancellation !~* 'cancel'
+	)
+GROUP BY
+	p.ingredients
+ORDER BY
+	no_items DESC;
+
+
 -- ---------- D. PRICING AND RATINGS ----------
 
 /* 1. If a Meat Lovers pizza costs $12 and Vegetarian costs $10 and there were no 
@@ -771,7 +900,6 @@ WHERE
 	cr.cancellation IS NULL
 	OR cr.cancellation !~* 'cancel';
 	
-
  /* 2. What if there was an additional $1 charge for any pizza extras?
 	Add cheese is $1 extra */
 
@@ -890,11 +1018,9 @@ GROUP BY
 ORDER BY
 	cc.order_id;
 
-
 /*
-	5. If a Meat Lovers pizza was $12 and Vegetarian $10 fixed prices with no cost 
-	for extras and each runner is paid $0.30 per kilometre traveled - how much money 
-	does Pizza Runner have left over after these deliveries?
+	5. If a Meat Lovers pizza was $12 and Vegetarian $10 fixed prices with no cost  for extras and each runner is paid $0.30 per kilometre 
+	traveled - how much money does Pizza Runner have left over after these deliveries?
 */
 
 -- With the help of previous questions, we are able to figure this one out.
@@ -933,9 +1059,8 @@ FROM
 -- ---------- E. BONUS QUESTIONS ----------
 
 /*
-	If Danny wants to expand his range of pizzas - how would this impact the existing 
-	data design? Write an INSERT statement to demonstrate what would happen if a 
-	new Supreme pizza with all the toppings was added to the Pizza Runner menu?
+	If Danny wants to expand his range of pizzas - how would this impact the existing  data design? Write an INSERT statement to 
+	demonstrate what would happen if a  new Supreme pizza with all the toppings was added to the Pizza Runner menu?
 */
 
 /* 1. Let's use temporary table for this problem so that it doesn't affect our original
