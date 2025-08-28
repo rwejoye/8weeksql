@@ -581,6 +581,163 @@ FROM
 ORDER BY
 	order_id;
 
+/* 5. Generate an alphabetically ordered comma separated ingredient list for 
+each pizza order from the customer_orders table and add a 2x in front of any 
+relevant ingredients
+For example: "Meat Lovers: 2xBacon, Beef, ... , Salami" */
+
+/*
+	1. Combine the ingredients for each pizza and the extra for that row.
+	2. Remove the excluded ingredients for that row.
+	3. Get the final order, using the count of each ingredient to get the required
+	result.
+*/
+
+WITH pizzas_cte AS (
+    SELECT
+        cc.order_id,
+        pn.pizza_name,
+        ARRAY_AGG(pt.topping_name ORDER BY pt.topping_id) as ingredients,
+        ROW_NUMBER() OVER(ORDER BY cc.order_id, cc.customer_id, cc.pizza_id) as rn
+    FROM
+        clean_customer_orders as cc
+    JOIN
+        pizza_recipes as pr
+    ON
+        cc.pizza_id = pr.pizza_id
+    CROSS JOIN LATERAL (
+        SELECT
+            TRIM(x)::INT as ing_id
+        FROM
+            REGEXP_SPLIT_TO_TABLE(pr.toppings, ',') as x
+    ) as ing_table
+    JOIN
+        pizza_toppings as pt
+    ON
+        ing_table.ing_id = pt.topping_id
+    JOIN
+        pizza_names as pn
+    ON
+        cc.pizza_id = pn.pizza_id
+    GROUP BY
+        cc.customer_id,
+        cc.order_id,
+        cc.pizza_id,
+        cc.extras,
+        cc.exclusions,
+        pn.pizza_name
+    ORDER BY
+        cc.order_id
+),
+exclusions_cte AS (
+    SELECT
+        ARRAY_AGG(COALESCE(pt.topping_name,'') ORDER BY pt.topping_id) as exclusions_name,
+        ROW_NUMBER() OVER(ORDER BY cc.order_id, cc.customer_id, cc.pizza_id) as rn
+    FROM
+        clean_customer_orders as cc
+    CROSS JOIN LATERAL (
+        SELECT
+            TRIM(x)::INT as exclusions_id
+        FROM
+            REGEXP_SPLIT_TO_TABLE(COALESCE(cc.exclusions, '0'), ',') as x
+    ) as exclusions_part
+    LEFT JOIN
+        pizza_toppings as pt
+    ON
+        exclusions_part.exclusions_id = pt.topping_id
+    GROUP BY
+        cc.order_id,
+        cc.customer_id,
+        cc.pizza_id,
+        cc.exclusions,
+        cc.extras
+    ORDER BY
+        cc.order_id
+),
+extras_cte AS (
+    SELECT
+        ARRAY_AGG(COALESCE(pt.topping_name,'') ORDER BY pt.topping_id) as extras_name,
+        ROW_NUMBER() OVER(ORDER BY cc.order_id, cc.customer_id, cc.pizza_id) as rn
+    FROM
+        clean_customer_orders as cc
+    CROSS JOIN LATERAL (
+        SELECT
+            TRIM(x)::INT as extras_id
+        FROM
+            REGEXP_SPLIT_TO_TABLE(COALESCE(cc.extras, '0'), ',') as x
+    ) as extras_part
+    LEFT JOIN
+        pizza_toppings as pt
+    ON
+        extras_part.extras_id = pt.topping_id
+    GROUP BY
+        cc.order_id,
+        cc.customer_id,
+        cc.pizza_id,
+        cc.exclusions,
+        cc.extras
+    ORDER BY
+        cc.order_id
+),
+full_cte as (
+    SELECT
+        p.rn as id,
+        p.order_id,
+        p.pizza_name,
+        p.ingredients || ext.extras_name as all_ing,
+        exc.exclusions_name
+    FROM
+        pizzas_cte as p
+    JOIN
+        extras_cte as ext
+    ON
+        p.rn = ext.rn
+    JOIN
+        exclusions_cte as exc
+    ON
+        COALESCE(p.rn, ext.rn) = exc.rn
+),
+final_cte as (
+    SELECT
+        f.id,
+        f.order_id,
+        f.pizza_name,
+        p.ingredients,
+        COUNT(p.ingredients) as no_items
+    FROM
+        full_cte as f
+    LEFT JOIN LATERAL UNNEST(f.all_ing) as p(ingredients) ON TRUE
+    WHERE
+        NOT (p.ingredients = ANY(COALESCE(f.exclusions_name, '{}'))) AND p.ingredients <> ''
+    GROUP BY
+        f.id,
+        f.pizza_name,
+        f.order_id,
+        p.ingredients
+    ORDER BY
+        f.id,
+        p.ingredients
+)
+SELECT
+    order_id,
+    CONCAT(
+        pizza_name || ': ',
+        STRING_AGG(
+            CASE
+                WHEN no_items > 1
+                THEN no_items::TEXT || 'x' || ingredients
+                ELSE ingredients
+            END,
+            ', '
+        )
+    )
+FROM
+    final_cte
+GROUP BY
+    id,
+    pizza_name,
+    order_id;
+
 -- ---------- D. PRICING AND RATINGS ----------
 
 /* 1. If a Meat Lovers pizza costs $12 and Vegetarian costs $10 and there were no 
